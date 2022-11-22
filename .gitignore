@@ -1,0 +1,18 @@
+.DS_STORE
+.DS_Store
+*.log
+
+node_modules
+.vscode/settings.json
+out
+
+
+# dist
+# build
+coverage
+.idea
+.netlify/
+
+# Don't push PDFTron static files
+src/static/webviewer/core
+src/static/webviewer/ui

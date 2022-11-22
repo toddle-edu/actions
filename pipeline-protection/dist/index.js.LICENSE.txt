@@ -1,0 +1,10 @@
+/*!
+ * is-plain-object <https://github.com/jonschlinkert/is-plain-object>
+ *
+ * Copyright (c) 2014-2017, Jon Schlinkert.
+ * Released under the MIT License.
+ */
+
+//! Throw Error if input team slug is not existing in organization
+
+//! Throw error if member is not part of target team

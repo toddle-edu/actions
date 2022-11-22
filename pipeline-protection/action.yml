@@ -1,0 +1,22 @@
+name: Pipeline Protection
+description: Protect pipeline from unauthorized users
+
+inputs:
+  actor:
+    description: Pipeline running user
+    required: true
+  team_name:
+    description: Check if user exists in team and if team is not disallowed
+    required: true
+  organization_name:
+    description: Organization to check existence of teams
+    required: true
+  token:
+    description: Github token with access to fetch team details
+    required: true
+outputs:
+  is_allowed:
+    description: Boolean status if user is allowed to run workflow
+runs:
+  using: node16
+  main: dist/index.js
