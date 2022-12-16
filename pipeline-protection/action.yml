@@ -6,7 +6,7 @@ inputs:
     description: Pipeline running user
     required: true
   team_name:
-    description: Check if user exists in team and if team is not disallowed
+    description: Comma-separated Team names, Check if user exists in team/teams
     required: true
   organization_name:
     description: Organization to check existence of teams
