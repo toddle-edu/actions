@@ -10,13 +10,13 @@ const core = require("@actions/core");
 
     console.log("=> Sending http request...");
 
+    console.log("📢 [index.js:19]", JSON.parse(headers), JSON.parse(data));
     const response = await axios({
       url,
       method,
       headers: JSON.parse(headers),
       data: JSON.parse(data)
     });
-    console.log("📢 [index.js:19]", JSON.parse(headers), JSON.parse(data));
     core.setOutput("request_response", JSON.stringify(response.data));
   } catch (e) {
     core.error(e.message || JSON.stringify(e, null, 2));
