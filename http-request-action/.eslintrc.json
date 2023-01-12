@@ -1,0 +1,29 @@
+{
+  "env": {
+    "es6": true,
+    "node": true
+  },
+  "extends": ["eslint:recommended"],
+  "globals": {
+    "SharedArrayBuffer": "readonly"
+  },
+  "parserOptions": {
+    "ecmaFeatures": {
+      "jsx": true
+    },
+    "ecmaVersion": 2019,
+    "sourceType": "module",
+    "requireConfigFile": false
+  },
+  "rules": {
+    "no-empty": "warn",
+    "no-unused-vars": "warn",
+    "no-undef": "error",
+    "no-useless-escape": "warn",
+    "prefer-const": "warn",
+    "no-extra-boolean-cast": "warn",
+    "no-prototype-builtins": "warn",
+    "no-useless-catch": "warn",
+    "no-async-promise-executor": "warn"
+  }
+}

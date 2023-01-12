@@ -1,0 +1,22 @@
+name: Send http request
+description: Send Http request to given URL
+
+inputs:
+  url:
+    description: url to request
+    required: true
+  method:
+    description: GET, POST, method
+    required: true
+  headers:
+    description: Any header for http request
+    required: true
+  data:
+    description: Data for request
+    required: true
+outputs:
+  request_response:
+    description: Response from the http request
+runs:
+  using: node16
+  main: dist/index.js
