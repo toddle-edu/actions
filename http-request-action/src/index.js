@@ -10,7 +10,7 @@ const core = require("@actions/core");
 
     console.log("=> Sending http request...");
 
-    console.log("📢 [index.js:19]", JSON.parse(headers), JSON.parse(data));
+    console.log("📢 [index.js:19]", JSON.parse(headers), data);
     const response = await axios({
       url,
       method,
