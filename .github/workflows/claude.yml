@@ -1,0 +1,85 @@
+name: Claude Code (reusable)
+
+# Reusable workflow that handles interactive @claude mentions on issues,
+# PR comments, and PR reviews.
+# Consumers call this via `uses: toddle-edu/actions/.github/workflows/claude.yml@develop`
+# and pass `secrets: inherit` so the dynamic OAuth token lookup works.
+#
+# Requirements on the calling repo (same as claude-code-review.yml):
+#   - Org variable CLAUDE_OAUTH_TOKEN_NAMES (newline-separated list of secret names)
+#   - Matching CLAUDE_CODE_OAUTH_TOKEN_* secrets at org or repo level
+#   - Org/repo secret OTEL_EXPORTER_OTLP_HEADERS (for Alloy telemetry auth)
+#
+# Note: The caller must gate this workflow on the "@claude" trigger condition
+# since that uses the caller's event context. See the suggested caller template.
+
+on:
+  workflow_call:
+    # No inputs — event context flows through from the caller.
+
+# OTEL telemetry — export traces/metrics to Alloy collector
+env:
+  CLAUDE_CODE_ENABLE_TELEMETRY: "1"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "https://alloy-ai-ingest.toddleapp.com"
+  OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_LOGS_EXPORTER: "otlp"
+  OTEL_METRICS_EXPORTER: "otlp"
+  OTEL_METRIC_EXPORT_INTERVAL: "15000"
+
+jobs:
+  claude:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+      actions: read # Required for Claude to read CI results on PRs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Select OAuth token (round-robin)
+        id: token
+        env:
+          TOKEN_NAMES: ${{ vars.CLAUDE_OAUTH_TOKEN_NAMES }}
+        run: |
+          if [ -z "$TOKEN_NAMES" ]; then
+            echo "::error::Organization variable CLAUDE_OAUTH_TOKEN_NAMES is not set"
+            exit 1
+          fi
+          tokens=()
+          while IFS= read -r line; do
+            # Trim leading/trailing whitespace (incl. \r from CRLF)
+            line="${line#"${line%%[![:space:]]*}"}"
+            line="${line%"${line##*[![:space:]]}"}"
+            [ -n "$line" ] && tokens+=("$line")
+          done <<< "$TOKEN_NAMES"
+          if [ ${#tokens[@]} -eq 0 ]; then
+            echo "::error::CLAUDE_OAUTH_TOKEN_NAMES is set but parsed to zero tokens"
+            exit 1
+          fi
+          number=${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          if [ "${{ github.run_attempt }}" -gt 1 ]; then
+            index=$(( RANDOM % ${#tokens[@]} ))
+          else
+            index=$(( number % ${#tokens[@]} ))
+          fi
+          echo "secret_name=${tokens[$index]}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Token selection: repo=${{ github.repository }}, number=${number}, attempt=${{ github.run_attempt }}, token_count=${#tokens[@]}, index=${index}, token=${tokens[$index]}"
+          owner="${tokens[$index]#CLAUDE_CODE_OAUTH_TOKEN_}"
+          owner_email="claude@$(echo "$owner" | tr '[:upper:]' '[:lower:]')"
+          echo "token_owner=${owner_email}" >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets[steps.token.outputs.secret_name] }}
+          # Allows Claude to read CI results on PRs
+          additional_permissions: |
+            actions: read
+        env:
+          OTEL_RESOURCE_ATTRIBUTES: "task=claude-mention,user_email=${{ steps.token.outputs.token_owner }},repo_name=${{ github.event.repository.name }}"

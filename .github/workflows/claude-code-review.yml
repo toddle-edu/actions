@@ -1,0 +1,118 @@
+name: Claude Code Review (reusable)
+
+# Reusable workflow that runs Claude Code's code-review plugin on a PR.
+# Consumers call this via `uses: toddle-edu/actions/.github/workflows/claude-code-review.yml@develop`
+# and pass `secrets: inherit` so the dynamic OAuth token lookup works.
+#
+# Requirements on the calling repo:
+#   - Org variable CLAUDE_OAUTH_TOKEN_NAMES (newline-separated list of secret names)
+#   - Matching CLAUDE_CODE_OAUTH_TOKEN_* secrets at org or repo level
+#   - Org/repo secret OTEL_EXPORTER_OTLP_HEADERS (for Alloy telemetry auth)
+
+on:
+  workflow_call:
+    # No inputs/outputs — all context comes from the caller's github.event.
+
+# OTEL telemetry — export traces/metrics to Alloy collector
+env:
+  CLAUDE_CODE_ENABLE_TELEMETRY: "1"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "https://alloy-ai-ingest.toddleapp.com"
+  OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_LOGS_EXPORTER: "otlp"
+  OTEL_METRICS_EXPORTER: "otlp"
+  OTEL_METRIC_EXPORT_INTERVAL: "15000"
+
+jobs:
+  claude-review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write # Required for claude-code-action OIDC authentication
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Select OAuth token (round-robin)
+        id: token
+        env:
+          TOKEN_NAMES: ${{ vars.CLAUDE_OAUTH_TOKEN_NAMES }}
+        run: |
+          if [ -z "$TOKEN_NAMES" ]; then
+            echo "::error::Organization variable CLAUDE_OAUTH_TOKEN_NAMES is not set"
+            exit 1
+          fi
+          tokens=()
+          while IFS= read -r line; do
+            # Trim leading/trailing whitespace (incl. \r from CRLF)
+            line="${line#"${line%%[![:space:]]*}"}"
+            line="${line%"${line##*[![:space:]]}"}"
+            [ -n "$line" ] && tokens+=("$line")
+          done <<< "$TOKEN_NAMES"
+          if [ ${#tokens[@]} -eq 0 ]; then
+            echo "::error::CLAUDE_OAUTH_TOKEN_NAMES is set but parsed to zero tokens"
+            exit 1
+          fi
+          hash_input="${{ github.repository }}/${{ github.event.pull_request.number }}/${{ github.run_number }}"
+          hash_value=$(echo -n "$hash_input" | cksum | cut -d' ' -f1)
+          index=$((hash_value % ${#tokens[@]}))
+          echo "secret_name=${tokens[$index]}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Token selection: repo=${{ github.repository }}, PR=${{ github.event.pull_request.number }}, run_number=${{ github.run_number }}, hash=${hash_value}, token_count=${#tokens[@]}, index=${index}, token=${tokens[$index]}"
+          owner="${tokens[$index]#CLAUDE_CODE_OAUTH_TOKEN_}"
+          owner_email="codereview@$(echo "$owner" | tr '[:upper:]' '[:lower:]')"
+          echo "token_owner=${owner_email}" >> "$GITHUB_OUTPUT"
+
+      - name: Get PR size
+        id: pr-size
+        run: |
+          additions=$(gh pr view ${{ github.event.pull_request.number }} --json additions -q '.additions')
+          deletions=$(gh pr view ${{ github.event.pull_request.number }} --json deletions -q '.deletions')
+          total=$((additions + deletions))
+          if [ "$total" -lt 100 ]; then
+            size="small"
+          elif [ "$total" -lt 500 ]; then
+            size="medium"
+          else
+            size="large"
+          fi
+          echo "size=$size" >> "$GITHUB_OUTPUT"
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+          echo "::notice::PR size: additions=${additions}, deletions=${deletions}, total=${total}, size=${size}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets[steps.token.outputs.secret_name] }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          classify_inline_comments: 'true'
+          include_fix_links: 'true'
+          prompt: |
+            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+
+            This PR has ${{ steps.pr-size.outputs.total }} lines changed (size: ${{ steps.pr-size.outputs.size }}).
+            If size is "small": be fast — focus only on correctness and bugs, keep comments minimal, skip style nits.
+            If size is "medium" or "large": do a thorough review covering correctness, performance, and security.
+
+            IMPORTANT: For each issue you find, in addition to the summary PR comment, you MUST also post an inline review comment on the specific line using the mcp__github_inline_comment__create_inline_comment tool. Call it with confirmed: true, the file path, line number, and a brief description of the issue. This ensures reviewers see comments directly on the relevant code lines.
+
+            After completing the review, post a summary comment on the PR using `gh pr comment`. Even if no issues found, confirm the review is done.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+        env:
+          MAX_MCP_OUTPUT_TOKENS: "50000" # Cap MCP tool output to avoid token overruns
+          OTEL_RESOURCE_ATTRIBUTES: "task=code-review,user_email=${{ steps.token.outputs.token_owner }},pr_number=${{ github.event.pull_request.number }},repo_name=${{ github.event.repository.name }}"
+
+      - name: Notify on failure
+        if: failure()
+        run: gh pr comment ${{ github.event.pull_request.number }} --body "Claude code review failed. Check the [Actions tab](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
