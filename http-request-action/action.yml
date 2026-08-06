@@ -18,5 +18,5 @@ outputs:
   request_response:
     description: Response from the http request
 runs:
-  using: node16
+  using: node24
   main: dist/index.js
