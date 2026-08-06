@@ -1,0 +1,60 @@
+name: Verify bundled dist
+
+# Both actions run from a committed dist/index.js bundle. Dependabot only ever
+# touches package.json / package-lock.json, so without this check a dependency
+# bump can be merged while the executed bundle still contains the vulnerable
+# code. This job fails the PR when dist/ no longer matches src/ + the lockfile.
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: ${{ matrix.action }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        action: [http-request-action, pipeline-protection]
+    defaults:
+      run:
+        working-directory: ${{ matrix.action }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ matrix.action }}/.nvmrc
+          cache: npm
+          cache-dependency-path: ${{ matrix.action }}/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Fail if dist/ is out of date
+        run: |
+          if [ -n "$(git status --porcelain dist)" ]; then
+            echo "::error::dist/ is out of sync with src/ and package-lock.json."
+            echo "Run 'npm run build' in ${{ matrix.action }}/ and commit dist/."
+            git --no-pager diff --stat dist
+            exit 1
+          fi
+          echo "dist/ is in sync."
+
+      - name: Audit production dependencies
+        # Production deps ship inside dist/ and are reachable at runtime, so a
+        # high-severity advisory here is a real exposure and blocks the PR.
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit all dependencies (informational)
+        # Dev-scope advisories only affect the build host. Surfaced, not blocking.
+        run: npm audit || true
+        continue-on-error: true
