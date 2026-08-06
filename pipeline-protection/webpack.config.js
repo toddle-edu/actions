@@ -11,7 +11,10 @@ module.exports = {
     clean: true,
     globalObject: "this"
   },
-  target: "node",
+  target: "node20",
+  resolve: {
+    conditionNames: ["import", "node", "require", "default"]
+  },
   optimization: {
     minimize: true
   },
@@ -26,8 +29,8 @@ module.exports = {
         test: /\.js$/,
         loader: "esbuild-loader",
         options: {
-          format: "cjs",
-          target: "node16",
+          format: "esm",
+          target: "node20",
           platform: "node",
           sourcesContent: false
         },
