@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+#
+# Rebuild and verify an action's dist/ bundle when its source or dependencies change.
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# Bypass for a genuine emergency:  git commit --no-verify
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+
+needs_check=()
+for action in http-request-action pipeline-protection; do
+  if echo "$staged" | grep -qE "^${action}/(src/|package\.json|package-lock\.json|webpack\.config\.js)"; then
+    needs_check+=("$action")
+  fi
+done
+
+if [ "${#needs_check[@]}" -eq 0 ]; then
+  exit 0
+fi
+
+echo "pre-commit: source or dependencies changed in ${needs_check[*]} — verifying dist/"
+
+if ! "$REPO_ROOT/scripts/verify-dist.sh" "${needs_check[@]}"; then
+  cat >&2 <<'EOF'
+
+pre-commit: BLOCKED — dist/ does not match src/ and package-lock.json.
+
+These actions execute the committed dist/index.js bundle, so a dependency or
+source change that isn't rebuilt does not reach the running code.
+
+  REBUILD=1 ./scripts/verify-dist.sh
+  git add <action>/dist
+  git commit
+
+EOF
+  exit 1
+fi

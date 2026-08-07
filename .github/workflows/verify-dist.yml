@@ -1,5 +1,10 @@
 name: Verify bundled dist
 
+# NOTE: GitHub Actions is currently DISABLED on this repository, so this workflow
+# never runs. It is kept here so the check starts working the moment Actions is
+# enabled. Until then the equivalent check is ./scripts/verify-dist.sh, wired to
+# a pre-commit hook in .githooks/ — see the README.
+#
 # Both actions run from a committed dist/index.js bundle. Dependabot only ever
 # touches package.json / package-lock.json, so without this check a dependency
 # bump can be merged while the executed bundle still contains the vulnerable
