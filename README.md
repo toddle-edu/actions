@@ -17,9 +17,13 @@ This is not hypothetical: the repo shipped axios 1.2.2 with 29 open advisories f
 three years while `package-lock.json` looked like it was being maintained, because 21
 Dependabot PRs had updated the lockfile and none had rebuilt the bundle.
 
-**GitHub Actions is disabled on this repository**, so
-[`.github/workflows/verify-dist.yml`](.github/workflows/verify-dist.yml) never runs.
-It is kept in place for the day Actions is enabled. Until then the check is manual.
+**GitHub Actions is disabled on this repository and will not be enabled** — CI is moving
+to Jenkins and these actions are expected to be retired with it. There is therefore no
+server-side check on this repo and there will not be one.
+
+**Rebuilding `dist/` is the developer's responsibility.** Commit the rebuilt bundle in
+the same PR as the code or dependency change. The pre-commit hook below enforces it
+locally; nothing else will.
 
 ### Enable the pre-commit hook (once per clone)
 

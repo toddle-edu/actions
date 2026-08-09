@@ -1,6 +1,6 @@
 <!--
-  GitHub Actions is disabled on this repository, so .github/workflows/verify-dist.yml
-  does not run. These checks are manual. Please don't skip them.
+  GitHub Actions is disabled on this repository and will not be enabled (CI is moving
+  to Jenkins). There is no server-side check. These are manual. Please don't skip them.
 -->
 
 ## What changed
