@@ -6,9 +6,10 @@
 # rebuild it leave the executed code unchanged — which is how this repo ended up
 # shipping axios 1.2.2 with 29 open advisories while the lockfile looked current.
 #
-# GitHub Actions is disabled on this repository, so .github/workflows/verify-dist.yml
-# never runs. This script is the working substitute: run it before merging anything
-# that touches dependencies or source.
+# GitHub Actions is disabled on this repository and will not be enabled (CI is moving
+# to Jenkins). There is no server-side check and there will not be one, so this script
+# plus the pre-commit hook in .githooks/ are the only guard. Run it before merging
+# anything that touches dependencies or source.
 #
 #   ./scripts/verify-dist.sh              # check every action
 #   ./scripts/verify-dist.sh pipeline-protection

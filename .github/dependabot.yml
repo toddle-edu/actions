@@ -56,11 +56,5 @@ updates:
         applies-to: security-updates
         dependency-type: development
 
-  # Keep the actions used by this repo's own workflows current.
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      actions:
-        patterns: ["*"]
+  # No github-actions ecosystem entry: this repo has no workflows of its own.
+  # GitHub Actions is disabled here and CI is moving to Jenkins.
